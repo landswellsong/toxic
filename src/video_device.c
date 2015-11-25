@@ -24,9 +24,11 @@
 #include "video_call.h"
 
 #include <sys/ioctl.h>
-#include <X11/Xlib.h>
-#include <X11/Xutil.h>
-#include <X11/Xos.h>
+#ifdef X11
+  #include <X11/Xlib.h>
+  #include <X11/Xutil.h>
+  #include <X11/Xos.h>
+#endif
 
 #include <vpx/vpx_image.h>
 
@@ -80,9 +82,11 @@ typedef struct VideoDevice {
 
     vpx_image_t input;
 
+#ifdef X11
     Display *x_display;
     Window x_window;
     GC x_gc;
+#endif
 
 } VideoDevice;
 
@@ -464,6 +468,7 @@ VideoDeviceError open_video_device(VideoDeviceType type, int32_t selection, uint
         }
 #endif
 
+#ifdef X11
         /* Create X11 window associated to device */
         if ( (device->x_display = XOpenDisplay(NULL)) == NULL ) {
             close_video_device(vdt_input, temp_idx);
@@ -498,12 +503,13 @@ VideoDeviceError open_video_device(VideoDeviceType type, int32_t selection, uint
         XClearWindow(device->x_display, device->x_window);
         XMapRaised(device->x_display, device->x_window);
         XFlush(device->x_display);
-
+#endif /* X11 */
         vpx_img_alloc(&device->input, VPX_IMG_FMT_I420, device->video_width, device->video_height, 1);
 
         video_thread_paused = false;
     } else { /* vdt_output */
 
+#ifdef X11
         /* Create X11 window associated to device */
         if ( (device->x_display = XOpenDisplay(NULL)) == NULL ) {
             close_video_device(vdt_output, temp_idx);
@@ -537,6 +543,7 @@ VideoDeviceError open_video_device(VideoDeviceType type, int32_t selection, uint
         XClearWindow(device->x_display, device->x_window);
         XMapRaised(device->x_display, device->x_window);
         XFlush(device->x_display);
+#endif /* X11 */
 
         vpx_img_alloc(&device->input, VPX_IMG_FMT_I420, device->video_width, device->video_height, 1);
     }
@@ -555,8 +562,9 @@ __inline VideoDeviceError write_video_out(uint16_t width, uint16_t height,
     VideoDevice* device = video_devices_running[vdt_output][0];
 
     if ( !device ) return vde_DeviceNotActive;
-
+#ifdef X11
     if( !device->x_window ) return vde_DeviceNotActive;
+#endif
 
     pthread_mutex_lock(device->mutex);
 
@@ -564,7 +572,9 @@ __inline VideoDeviceError write_video_out(uint16_t width, uint16_t height,
     if ( device->video_width != width || device->video_height != height ) {
         device->video_width = width;
         device->video_height = height;
+#ifdef X11
         XResizeWindow(device->x_display, device->x_window, width, height);
+#endif
 
         vpx_img_free(&device->input);
         vpx_img_alloc(&device->input, VPX_IMG_FMT_I420, width, height, 1);
@@ -577,6 +587,7 @@ __inline VideoDeviceError write_video_out(uint16_t width, uint16_t height,
     uint8_t *img_data = malloc(width * height * 4);
     yuv420tobgr(width, height, y, u, v, ystride, ustride, vstride, img_data);
 
+#ifdef X11
     /* Allocate image data in X11 */
     XImage image = {
         .width = width,
@@ -600,6 +611,8 @@ __inline VideoDeviceError write_video_out(uint16_t width, uint16_t height,
     XCopyArea(device->x_display, pixmap, device->x_window, device->x_gc, 0, 0, width, height, 0, 0);
     XFreePixmap(device->x_display, pixmap);
     XFlush(device->x_display);
+#endif /* X11 */
+
     free(img_data);
 
     pthread_mutex_unlock(device->mutex);
@@ -665,6 +678,7 @@ void* video_thread_poll (void* arg) // TODO: maybe use thread for every input so
                     yuv420tobgr(video_width, video_height, y, u, v,
                                 video_width, video_width/2, video_width/2, img_data);
 
+#ifdef X11
                     /* Allocate image data in X11 */
                     XImage image = {
                         .width = video_width,
@@ -688,6 +702,8 @@ void* video_thread_poll (void* arg) // TODO: maybe use thread for every input so
                     XCopyArea(device->x_display, pixmap, device->x_window, device->x_gc, 0, 0, video_width, video_height, 0, 0);
                     XFreePixmap(device->x_display, pixmap);
                     XFlush(device->x_display);
+#endif /* X11 */
+
                     free(img_data);
 
 #if defined(__linux__) || defined(__FreeBSD__)
@@ -740,9 +756,11 @@ VideoDeviceError close_video_device(VideoDeviceType type, uint32_t device_idx)
             osx_video_close_device(device_idx);
 #endif
             vpx_img_free(&device->input);
+#ifdef X11
             XDestroyWindow(device->x_display, device->x_window);
             XFlush(device->x_display);
             XCloseDisplay(device->x_display);
+#endif /* X11 */
             pthread_mutex_destroy(device->mutex);
 
 #if defined(__linux__) || defined(__FreeBSD__)
@@ -752,9 +770,11 @@ VideoDeviceError close_video_device(VideoDeviceType type, uint32_t device_idx)
             free(device);
         } else {
             vpx_img_free(&device->input);
+#ifdef X11
             XDestroyWindow(device->x_display, device->x_window);
             XFlush(device->x_display);
             XCloseDisplay(device->x_display);
+#endif
             pthread_mutex_destroy(device->mutex);
             free(device);
         }

@@ -6,6 +6,12 @@ ifneq ($(X11), disabled)
     -include $(CHECKS_DIR)/x11.mk
 endif
 
+# Check if we want build terminal video (libcaca) support
+CACA = $(shell if [ -z "$(DISABLE_CACA)" ] || [ "$(DISABLE_CACA)" = "0" ] ; then echo enabled ; else echo disabled ; fi)
+ifneq ($(CACA), disabled)
+    -include $(CHECKS_DIR)/caca.mk
+endif
+
 # Check if we want build audio support
 AUDIO = $(shell if [ -z "$(DISABLE_AV)" ] || [ "$(DISABLE_AV)" = "0" ] ; then echo enabled ; else echo disabled ; fi)
 ifneq ($(AUDIO), disabled)
@@ -14,10 +20,13 @@ endif
 
 # Check if we want build video support
 VIDEO = $(shell if [ -z "$(DISABLE_AV)" ] || [ "$(DISABLE_AV)" = "0" ] ; then echo enabled ; else echo disabled ; fi)
-ifneq ($(X11), disabled)
 ifneq ($(AUDIO), disabled)
 ifneq ($(VIDEO), disabled)
+# TODO emulation of OR via elseif is pretty ugly
+ifneq ($(X11), disabled)
     -include $(CHECKS_DIR)/video.mk
+else ifneq ($(CACA), disabled)
+		-include $(CHECKS_DIR)/video.mk
 endif
 endif
 endif
